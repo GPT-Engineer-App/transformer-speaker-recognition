@@ -1,0 +1,71 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+class TransformerEncoder(nn.Module):
+    def __init__(self, d_model, nhead, num_layers, dropout=0.1):
+        super(TransformerEncoder, self).__init__()
+        self.encoder_layer = nn.TransformerEncoderLayer(d_model, nhead, dropout=dropout)
+        self.transformer_encoder = nn.TransformerEncoder(self.encoder_layer, num_layers)
+        
+    def forward(self, x):
+        return self.transformer_encoder(x)
+
+class SpeakerRecognitionModel(nn.Module):
+    def __init__(self, input_dim, d_model, nhead, num_layers, num_classes, dropout=0.1):
+        super(SpeakerRecognitionModel, self).__init__()
+        self.embedding = nn.Linear(input_dim, d_model)
+        self.transformer_encoder = TransformerEncoder(d_model, nhead, num_layers, dropout)
+        self.classifier = nn.Linear(d_model, num_classes)
+        
+    def forward(self, x, support_set):
+        # Embed input features
+        x = self.embedding(x)
+        
+        # Encode input using transformer encoder
+        x = self.transformer_encoder(x)
+        
+        # Average pooling
+        x = x.mean(dim=1)
+        
+        # Compute distances to support set examples
+        distances = []
+        for support_example in support_set:
+            support_example = self.embedding(support_example)
+            support_example = self.transformer_encoder(support_example)
+            support_example = support_example.mean(dim=1)
+            distance = F.pairwise_distance(x, support_example)
+            distances.append(distance)
+        distances = torch.stack(distances)
+        
+        # Classify based on distances
+        logits = -distances
+        return logits
+
+# Example usage
+input_dim = 128
+d_model = 256
+nhead = 8
+num_layers = 2
+num_classes = 5
+dropout = 0.1
+
+model = SpeakerRecognitionModel(input_dim, d_model, nhead, num_layers, num_classes, dropout)
+
+# Training loop
+for epoch in range(num_epochs):
+    for batch in dataloader:
+        inputs, support_set, labels = batch
+        logits = model(inputs, support_set)
+        loss = F.cross_entropy(logits, labels)
+        # Backward pass and optimization step
+        # ...
+
+# Evaluation
+model.eval()
+with torch.no_grad():
+    inputs, support_set = test_batch
+    logits = model(inputs, support_set)
+    predicted_labels = logits.argmax(dim=1)
+    # Compute accuracy
+    # ...
